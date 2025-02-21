@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import documents, query, health
+from app.api.routes import documents, query, health, database
 from app.core.config import settings
 
 app = FastAPI(
@@ -22,3 +22,4 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
 app.include_router(documents.router, prefix="/api/v1", tags=["documents"])
 app.include_router(query.router, prefix="/api/v1", tags=["query"])
+app.include_router(database.router, prefix="/api/v1/db", tags=["database"])
