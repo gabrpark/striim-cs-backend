@@ -1,6 +1,5 @@
 from app.services.database.database import db
-from app.services.embeddings.embeddings_service import embeddings_service
-from app.services.vector_store.pinecone_service import pinecone_service
+from app.services.llm.llm_service import llm_service
 from typing import Dict, List, Any
 import logging
 import json
@@ -55,11 +54,8 @@ class DataProcessingService:
     @staticmethod
     def format_text(data: Dict[str, Any], source: str) -> str:
         """Format the data fields into a single text string"""
-        # Get relevant fields for this table
         relevant_fields = DataProcessingService.get_relevant_fields(source)
 
-        # Remove None values and convert to string, handling datetime objects
-        # Only include relevant fields
         formatted_data = {}
         for k, v in data.items():
             if k in relevant_fields and v is not None:
@@ -68,21 +64,20 @@ class DataProcessingService:
                 else:
                     formatted_data[k] = str(v)
 
-        # Create a formatted string with field names
         text = " ".join(f"{k}: {v}" for k, v in formatted_data.items())
         return text
 
     def get_id_column_info(self, table_name: str) -> tuple:
         """Get the primary key column name and type for the given table"""
         id_columns = {
-            "zendesk_tickets": ("zd_ticket_id", int),  # BIGINT -> int
-            "salesforce_accounts": ("sf_account_id", str),  # VARCHAR -> str
-            "jira_issues": ("jira_issue_id", str)  # VARCHAR -> str
+            "zendesk_tickets": ("zd_ticket_id", int),
+            "salesforce_accounts": ("sf_account_id", str),
+            "jira_issues": ("jira_issue_id", str)
         }
         return id_columns[table_name]
 
-    async def process_and_store_record(self, table_name: str, record_id: str) -> Dict[str, Any]:
-        """Process a single record and store its embedding in Pinecone"""
+    async def process_and_summarize_record(self, table_name: str, record_id: str) -> Dict[str, Any]:
+        """Process a record and generate a summary using LLM"""
         try:
             # Get the correct ID column name and type
             id_column, id_type = self.get_id_column_info(table_name)
@@ -94,7 +89,7 @@ class DataProcessingService:
                 raise ValueError(
                     f"Invalid record_id format. Expected {id_type.__name__} for {table_name}")
 
-            # Fetch the record from database using the correct ID column
+            # Fetch the record from database
             query = f"SELECT * FROM {table_name} WHERE {id_column} = $1"
             record = await db.fetchrow(query, converted_id)
 
@@ -102,38 +97,119 @@ class DataProcessingService:
                 raise ValueError(
                     f"No record found in {table_name} with {id_column} {record_id}")
 
-            # Format the text
+            # Format the text with relevant fields
             formatted_text = self.format_text(record, table_name)
 
-            # Generate embedding
-            embeddings = await embeddings_service.get_embeddings([formatted_text])
-
-            # Prepare vector for Pinecone
-            vector = {
-                'id': f"{table_name}_{record_id}",
-                'values': embeddings[0],
-                'metadata': {
-                    'source': table_name,
-                    'record_id': record_id,
-                    'text': formatted_text,
-                    'original_data': json.dumps(record, cls=DateTimeEncoder)
-                }
-            }
-
-            # Store in Pinecone
-            response = await pinecone_service.upsert_vectors(
-                vectors=[vector],
-                namespace=table_name
+            # Generate summary using LLM
+            summary = await llm_service.generate_summary(
+                text=formatted_text,
+                table_name=table_name
             )
 
             return {
                 "status": "success",
-                "message": f"Successfully processed and stored record {record_id} from {table_name}",
-                "vector_id": vector['id']
+                "record_id": record_id,
+                "source": table_name,
+                "summary": summary,
+                "original_data": json.dumps(record, cls=DateTimeEncoder)
             }
 
         except Exception as e:
             logger.error(f"Error processing record: {str(e)}")
+            raise
+
+    async def generate_comprehensive_summary(self, context: Dict[str, Any]) -> str:
+        """Generate comprehensive summary of ticket with related data"""
+        try:
+            # Format context data
+            ticket_text = self.format_text(
+                context["ticket"], "zendesk_tickets")
+
+            jira_texts = [
+                self.format_text(issue, "jira_issues")
+                for issue in context["jira_issues"]
+            ]
+
+            active_jira_texts = [
+                self.format_text(issue, "jira_issues")
+                for issue in context["active_jira_issues"]
+            ]
+
+            account_text = (
+                self.format_text(context["account"], "salesforce_accounts")
+                if context["account"] else "No account data available"
+            )
+
+            recent_tickets_text = "\n".join([
+                self.format_text(ticket, "zendesk_tickets")
+                for ticket in context["recent_tickets"]
+            ])
+
+            # Combine all context
+            full_context = f"""
+            Current Ticket Information:
+            {ticket_text}
+
+            Directly Related Jira Issues:
+            {'\n'.join(jira_texts)}
+
+            Account Information:
+            {account_text}
+
+            Recent Support History:
+            {recent_tickets_text}
+
+            Active Technical Issues for this Client:
+            {'\n'.join(active_jira_texts)}
+            """
+
+            # Generate summary using LLM
+            return await llm_service.generate_summary(
+                text=full_context,
+                summary_type="ticket_comprehensive"
+            )
+
+        except Exception as e:
+            logger.error(f"Error generating comprehensive summary: {str(e)}")
+            raise
+
+    async def generate_account_health_summary(self, context: Dict[str, Any]) -> str:
+        """Generate account health summary"""
+        try:
+            # Format context data
+            account_text = self.format_text(
+                context["account"], "salesforce_accounts")
+
+            recent_tickets_text = "\n".join([
+                self.format_text(ticket, "zendesk_tickets")
+                for ticket in context["recent_tickets"]
+            ])
+
+            active_issues_text = "\n".join([
+                self.format_text(issue, "jira_issues")
+                for issue in context["active_issues"]
+            ])
+
+            # Combine all context
+            full_context = f"""
+            Account Information:
+            {account_text}
+
+            Recent Support Tickets:
+            {recent_tickets_text}
+
+            Active Technical Issues:
+            {active_issues_text}
+            """
+
+            # Generate summary using LLM
+            return await llm_service.generate_summary(
+                text=full_context,
+                summary_type="account_health"
+            )
+
+        except Exception as e:
+            logger.error(f"Error generating account health summary: {str(e)}")
             raise
 
 

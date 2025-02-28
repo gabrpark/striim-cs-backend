@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from app.services.vector_store.pinecone_service import PineconeService
+# from app.services.vector_store.pinecone_service import PineconeService
 from langchain_openai import OpenAIEmbeddings
 import pinecone
 import asyncpg
@@ -70,45 +70,45 @@ async def test_database():
         }
 
 
-@router.get("/test-pinecone")
-async def test_pinecone():
-    try:
-        # Initialize Pinecone directly
-        pc = Pinecone(api_key=settings.PINECONE_API_KEY)
+# @router.get("/test-pinecone")
+# async def test_pinecone():
+#     try:
+#         # Initialize Pinecone directly
+#         pc = Pinecone(api_key=settings.PINECONE_API_KEY)
 
-        # Get the index
-        index = pc.Index(settings.PINECONE_INDEX_NAME)
+#         # Get the index
+#         index = pc.Index(settings.PINECONE_INDEX_NAME)
 
-        # Get stats to test connection
-        stats = index.describe_index_stats()
+#         # Get stats to test connection
+#         stats = index.describe_index_stats()
 
-        # Convert namespaces to dict first
-        namespaces_dict = {}
-        for ns_name, ns_data in stats.namespaces.items():
-            namespaces_dict[ns_name] = {
-                "vector_count": ns_data.vector_count
-            }
+#         # Convert namespaces to dict first
+#         namespaces_dict = {}
+#         for ns_name, ns_data in stats.namespaces.items():
+#             namespaces_dict[ns_name] = {
+#                 "vector_count": ns_data.vector_count
+#             }
 
-        # Convert stats to dict before returning
-        stats_dict = {
-            "namespaces": namespaces_dict,
-            "dimension": stats.dimension,
-            "index_fullness": stats.index_fullness,
-            "total_vector_count": stats.total_vector_count
-        }
+#         # Convert stats to dict before returning
+#         stats_dict = {
+#             "namespaces": namespaces_dict,
+#             "dimension": stats.dimension,
+#             "index_fullness": stats.index_fullness,
+#             "total_vector_count": stats.total_vector_count
+#         }
 
-        return JSONResponse(content={
-            "status": "success",
-            "message": "Successfully connected to Pinecone",
-            "index_name": settings.PINECONE_INDEX_NAME,
-            "stats": stats_dict
-        })
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": str(e),
-                "error_type": type(e).__name__
-            }
-        )
+#         return JSONResponse(content={
+#             "status": "success",
+#             "message": "Successfully connected to Pinecone",
+#             "index_name": settings.PINECONE_INDEX_NAME,
+#             "stats": stats_dict
+#         })
+#     except Exception as e:
+#         return JSONResponse(
+#             status_code=500,
+#             content={
+#                 "status": "error",
+#                 "message": str(e),
+#                 "error_type": type(e).__name__
+#             }
+#         )
