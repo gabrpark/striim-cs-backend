@@ -1,9 +1,9 @@
 from app.services.database.database import db
 from app.services.llm.llm_service import llm_service
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +97,21 @@ class DataProcessingService:
                 raise ValueError(
                     f"No record found in {table_name} with {id_column} {record_id}")
 
+            # Check if we need to regenerate the summary
+            should_regenerate = await self.should_regenerate_summary(converted_id)
+
+            if not should_regenerate:
+                cached_summary = await self.get_cached_summary(converted_id)
+                if cached_summary:
+                    return {
+                        "status": "success",
+                        "record_id": record_id,
+                        "source": table_name,
+                        "summary": cached_summary['summary'],
+                        "cached": True,
+                        "last_generated": cached_summary['last_generated_at']
+                    }
+
             # Format the text with relevant fields
             formatted_text = self.format_text(record, table_name)
 
@@ -106,11 +121,23 @@ class DataProcessingService:
                 table_name=table_name
             )
 
+            # Store the new summary
+            metadata = {
+                'link_count': len(record.get('linked_jira_issues', [])),
+                'jira_count': len(await db.fetch(
+                    "SELECT * FROM jira_issues WHERE linked_zendesk_ticket = $1",
+                    converted_id
+                ))
+            }
+
+            await self.store_summary(converted_id, summary, metadata)
+
             return {
                 "status": "success",
                 "record_id": record_id,
                 "source": table_name,
                 "summary": summary,
+                "cached": False,
                 "original_data": json.dumps(record, cls=DateTimeEncoder)
             }
 
@@ -211,6 +238,82 @@ class DataProcessingService:
         except Exception as e:
             logger.error(f"Error generating account health summary: {str(e)}")
             raise
+
+    async def should_regenerate_summary(self, ticket_id: int) -> bool:
+        """
+        Determine if summary needs regeneration based on:
+        1. If summary doesn't exist
+        2. If there are new related records since last generation
+        3. If summary is older than 24 hours
+        """
+        try:
+            # Check existing summary
+            query = """
+                SELECT ts.*, 
+                       (SELECT COUNT(*) FROM zendesk_jira_links WHERE zd_ticket_id = $1) as link_count,
+                       (SELECT COUNT(*) FROM jira_issues ji 
+                        JOIN zendesk_jira_links zjl ON ji.jira_issue_id = zjl.jira_issue_id 
+                        WHERE zjl.zd_ticket_id = $1) as jira_count
+                FROM ticket_summaries ts
+                WHERE ts.ticket_id = $1
+            """
+            result = await db.fetchrow(query, ticket_id)
+
+            if not result:
+                return True
+
+            # Get current counts of related data
+            current_metadata = {
+                'link_count': result['link_count'],
+                'jira_count': result['jira_count']
+            }
+
+            stored_metadata = result['metadata'] or {}
+
+            # Check if any counts changed
+            if current_metadata != stored_metadata:
+                return True
+
+            # Check if summary is older than 24 hours
+            time_threshold = datetime.now() - timedelta(hours=24)
+            if result['last_generated_at'] < time_threshold:
+                return True
+
+            return False
+
+        except Exception as e:
+            logger.error(f"Error checking summary regeneration: {str(e)}")
+            return True
+
+    async def store_summary(self, ticket_id: int, summary: str, metadata: Dict[str, Any]) -> None:
+        """Store or update summary in the database"""
+        try:
+            query = """
+                INSERT INTO ticket_summaries (ticket_id, summary, metadata)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (ticket_id) 
+                DO UPDATE SET 
+                    summary = EXCLUDED.summary,
+                    metadata = EXCLUDED.metadata,
+                    last_generated_at = CURRENT_TIMESTAMP
+            """
+            await db.execute(query, ticket_id, summary, json.dumps(metadata))
+        except Exception as e:
+            logger.error(f"Error storing summary: {str(e)}")
+            raise
+
+    async def get_cached_summary(self, ticket_id: int) -> Optional[Dict[str, Any]]:
+        """Retrieve cached summary if it exists"""
+        try:
+            query = """
+                SELECT summary, last_generated_at, metadata
+                FROM ticket_summaries
+                WHERE ticket_id = $1
+            """
+            return await db.fetchrow(query, ticket_id)
+        except Exception as e:
+            logger.error(f"Error retrieving cached summary: {str(e)}")
+            return None
 
 
 data_processing_service = DataProcessingService()

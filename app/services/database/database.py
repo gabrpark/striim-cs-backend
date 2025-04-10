@@ -47,26 +47,45 @@ class DatabaseService:
                 logger.error(f"Database operation failed: {str(e)}")
                 raise
 
-    async def execute(self, query: str, *args) -> str:
-        """Execute a query that doesn't return rows"""
-        async with self.connection() as conn:
-            return await conn.execute(query, *args)
+    async def execute(self, query: str, *args):
+        if not self.pool:
+            await self.connect()
+        try:
+            return await self.pool.execute(query, *args)
+        except asyncpg.InvalidCachedStatementError:
+            await self.pool.execute('DEALLOCATE ALL')
+            return await self.pool.execute(query, *args)
+        except Exception as e:
+            logger.error(f"Database operation failed: {str(e)}")
+            raise
 
     def _record_to_dict(self, record: Record) -> Dict[str, Any]:
         """Convert asyncpg record to dictionary"""
         return dict(record)
 
-    async def fetch(self, query: str, *args) -> List[Dict[str, Any]]:
-        """Execute a query and return all rows as dictionaries"""
-        async with self.connection() as conn:
-            records = await conn.fetch(query, *args)
-            return [self._record_to_dict(record) for record in records]
+    async def fetch(self, query: str, *args):
+        if not self.pool:
+            await self.connect()
+        try:
+            return await self.pool.fetch(query, *args)
+        except asyncpg.InvalidCachedStatementError:
+            await self.pool.execute('DEALLOCATE ALL')
+            return await self.pool.fetch(query, *args)
+        except Exception as e:
+            logger.error(f"Database operation failed: {str(e)}")
+            raise
 
-    async def fetchrow(self, query: str, *args) -> Optional[Dict[str, Any]]:
-        """Execute a query and return one row as dictionary"""
-        async with self.connection() as conn:
-            record = await conn.fetchrow(query, *args)
-            return self._record_to_dict(record) if record else None
+    async def fetchrow(self, query: str, *args):
+        if not self.pool:
+            await self.connect()
+        try:
+            return await self.pool.fetchrow(query, *args)
+        except asyncpg.InvalidCachedStatementError:
+            await self.pool.execute('DEALLOCATE ALL')
+            return await self.pool.fetchrow(query, *args)
+        except Exception as e:
+            logger.error(f"Database operation failed: {str(e)}")
+            raise
 
     async def fetchval(self, query: str, *args) -> Any:
         """Execute a query and return a single value"""
@@ -138,6 +157,16 @@ class DatabaseService:
                 "status": "error",
                 "message": str(e)
             }
+
+    async def verify_summary_storage(self, ticket_id: int) -> Dict[str, Any]:
+        """Verify if summary was stored correctly"""
+        query = """
+            SELECT zd_ticket_id, summary, updated_at
+            FROM zendesk_tickets
+            WHERE zd_ticket_id = $1
+        """
+        result = await self.fetchrow(query, ticket_id)
+        return dict(result) if result else None
 
 
 # Create a global instance
