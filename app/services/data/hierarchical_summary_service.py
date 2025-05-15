@@ -122,13 +122,9 @@ class HierarchicalSummaryService:
                 summary_type=summary_type
             )
 
-            # Ensure proper markdown formatting
-            if summary_type == 'all_tickets':
-                # Format the summary with proper markdown
-                formatted_summary = self._format_ticket_summary_markdown(
-                    summary_text, source_data)
-            else:
-                formatted_summary = summary_text
+            # For all summary types, return the summary text directly
+            # The summary text should already be formatted as requested by the prompt
+            formatted_summary = summary_text
 
             # Store summary and relationships
             stored_summary = await self._store_summary(
@@ -147,23 +143,23 @@ class HierarchicalSummaryService:
     def _format_ticket_summary_markdown(self, summary_text: str, source_data: Dict[str, Any]) -> str:
         """Format ticket summary with proper markdown"""
         try:
-            # Initialize markdown variable
-            markdown = ""
-
-            # Add AI analysis section
-            # markdown += f"## 🤖 AI-Generated Analysis\n\n"
-
-            # Extract the analysis part from the original summary
-            analysis_parts = summary_text.split("Based on the open tickets")
-            if len(analysis_parts) > 1:
-                markdown += f"Based on the open tickets{analysis_parts[1]}"
-            else:
-                markdown += summary_text
-
-            return markdown
+            # For both individual and group summaries, return the summary text directly
+            # The summary text should already be formatted as requested by the prompt
+            return summary_text
 
         except Exception as e:
             logger.error(f"Error formatting ticket summary markdown: {str(e)}")
+            return summary_text
+
+    def _format_issue_summary_markdown(self, summary_text: str, source_data: Dict[str, Any]) -> str:
+        """Format issue summary with proper markdown"""
+        try:
+            # For both individual and group summaries, return the summary text directly
+            # The summary text should already be formatted as requested by the prompt
+            return summary_text
+
+        except Exception as e:
+            logger.error(f"Error formatting issue summary markdown: {str(e)}")
             return summary_text
 
     async def _get_source_data(
@@ -180,6 +176,10 @@ class HierarchicalSummaryService:
             return await self._get_account_data(params['account_id'])
         elif summary_type == 'all_tickets':
             return await self._get_all_tickets_data(params)
+        elif summary_type == 'all_accounts':
+            return await self._get_all_accounts_data(params)
+        elif summary_type == 'all_issues':
+            return await self._get_all_issues_data(params)
         # Add similar methods for other types...
 
         raise ValueError(f"Unsupported summary type: {summary_type}")
@@ -305,20 +305,9 @@ class HierarchicalSummaryService:
                 "4. Key actions taken"
             ),
             'all_tickets': (
-                "As a VP of Sales, analyze these support tickets and provide:\n\n"
-                "1. Executive Summary:\n"
-                "   - Key business impact and customer sentiment\n"
-                "   - Critical issues affecting customer relationships\n"
-                "   - Overall support health indicators\n\n"
-                "2. Actionable Insights:\n"
-                "   - Specific recommendations for account management\n"
-                "   - Areas requiring immediate attention\n"
-                "   - Opportunities for customer success intervention\n\n"
-                "3. Strategic Recommendations:\n"
-                "   - Suggested next steps for customer engagement\n"
-                "   - Potential upsell or expansion opportunities\n"
-                "   - Risk mitigation strategies\n\n"
-                "Focus on business impact and actionable steps that can improve customer relationships and drive revenue growth."
+                "As a VP of Sales, provide a concise 5-sentence paragraph summary of these support tickets. "
+                "Focus on the most important business impact and actionable steps that can improve customer relationships. "
+                "Keep it brief and to the point without detailed breakdowns or statistics."
             ),
             'jira_issue': (
                 "Summarize this Jira issue focusing on: "
@@ -328,20 +317,8 @@ class HierarchicalSummaryService:
                 "4. Key actions taken and next steps"
             ),
             'all_issues': (
-                "As a VP of Sales, analyze these Jira issues and provide:\n\n"
-                "1. Executive Summary:\n"
-                "   - Key business impact and customer sentiment\n"
-                "   - Critical issues affecting customer relationships\n"
-                "   - Overall development health indicators\n\n"
-                "2. Actionable Insights:\n"
-                "   - Specific recommendations for account management\n"
-                "   - Areas requiring immediate attention\n"
-                "   - Opportunities for customer success intervention\n\n"
-                "3. Strategic Recommendations:\n"
-                "   - Suggested next steps for customer engagement\n"
-                "   - Potential upsell or expansion opportunities\n"
-                "   - Risk mitigation strategies\n\n"
-                "Focus on business impact and actionable steps that can improve customer relationships and drive revenue growth."
+                "Write one sentence summarizing the most critical issue, then list up to 3 key bullet points. "
+                "No statistics or metrics."
             ),
             'salesforce_account': (
                 "Summarize this Salesforce account focusing on: "
@@ -351,24 +328,13 @@ class HierarchicalSummaryService:
                 "4. Key actions and strategic recommendations"
             ),
             'all_accounts': (
-                "As a VP of Sales, analyze these Salesforce accounts and provide:\n\n"
-                "1. Executive Summary:\n"
-                "   - Key business impact and customer sentiment\n"
-                "   - Critical issues affecting customer relationships\n"
-                "   - Overall account health indicators\n\n"
-                "2. Actionable Insights:\n"
-                "   - Specific recommendations for account management\n"
-                "   - Areas requiring immediate attention\n"
-                "   - Opportunities for customer success intervention\n\n"
-                "3. Strategic Recommendations:\n"
-                "   - Suggested next steps for customer engagement\n"
-                "   - Potential upsell or expansion opportunities\n"
-                "   - Risk mitigation strategies\n\n"
-                "Focus on business impact and actionable steps that can improve customer relationships and drive revenue growth."
+                "Provide a concise 5-sentence paragraph summary of these Salesforce accounts. "
+                "Focus on key metrics (total accounts, active accounts, target accounts) and the most important business insights. "
+                "Keep it brief and to the point without detailed breakdowns or statistics."
             ),
             # Add other prompt templates...
         }
-        return prompts.get(summary_type, "Provide a comprehensive summary of the data")
+        return prompts.get(summary_type, "Provide a concise 5-sentence paragraph summary of the data")
 
     async def _get_ticket_data(self, ticket_id: str) -> Dict[str, Any]:
         """Get comprehensive data for a single ticket"""
@@ -433,6 +399,7 @@ class HierarchicalSummaryService:
         try:
             start_date = params.get('date_range_start')
             end_date = params.get('date_range_end')
+            client_id = params.get('client_id')
 
             # Check if we need to filter by specific ticket IDs
             include_ticket_ids = params.get('include_ticket_ids', [])
@@ -457,18 +424,26 @@ class HierarchicalSummaryService:
             """
 
             query_params = [start_date, end_date]
+            param_index = 3
+
+            # Add client_id filter if provided
+            if client_id:
+                query += f" AND zt.client_id = ${param_index}"
+                query_params.append(client_id)
+                param_index += 1
 
             # Add filtering by specific ticket IDs if provided
             if include_ticket_ids:
                 placeholders = [
-                    f"${i+3}" for i in range(len(include_ticket_ids))]
+                    f"${i+param_index}" for i in range(len(include_ticket_ids))]
                 query += f" AND zt.zd_ticket_id::text IN ({', '.join(placeholders)})"
                 query_params.extend(include_ticket_ids)
+                param_index += len(include_ticket_ids)
 
             # Add exclusion of specific ticket IDs if provided
             if exclude_ticket_ids:
                 placeholders = [
-                    f"${i+3+len(include_ticket_ids)}" for i in range(len(exclude_ticket_ids))]
+                    f"${i+param_index}" for i in range(len(exclude_ticket_ids))]
                 query += f" AND zt.zd_ticket_id::text NOT IN ({', '.join(placeholders)})"
                 query_params.extend(exclude_ticket_ids)
 
@@ -537,12 +512,212 @@ class HierarchicalSummaryService:
                     "date_range": {
                         "start": start_date,
                         "end": end_date
-                    }
+                    },
+                    "client_id": client_id
                 }
             }
 
         except Exception as e:
             logger.error(f"Error getting all tickets data: {str(e)}")
+            raise
+
+    async def _get_all_accounts_data(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Get data for all Salesforce accounts within date range"""
+        try:
+            start_date = params.get('date_range_start')
+            end_date = params.get('date_range_end')
+            client_id = params.get('client_id')
+
+            # Base query for accounts with related data
+            query = """
+                WITH account_data AS (
+                    SELECT 
+                        sa.*,
+                        COUNT(DISTINCT zt.zd_ticket_id) as ticket_count,
+                        COUNT(DISTINCT j.jira_issue_id) as issue_count
+                    FROM salesforce_accounts sa
+                    LEFT JOIN zendesk_tickets zt ON sa.sf_account_id = zt.sf_account_id
+                    LEFT JOIN jira_issues j ON sa.sf_account_id = j.sf_account_id
+                    WHERE 1=1
+                    AND ($1::timestamp IS NULL OR sa.source_created_at >= $1)
+                    AND ($2::timestamp IS NULL OR sa.source_created_at <= $2)
+            """
+
+            query_params = [start_date, end_date]
+
+            # Add client_id filter if provided
+            if client_id:
+                query += " AND sa.client_id = $3"
+                query_params.append(client_id)
+
+            # Complete the query
+            query += """
+                    GROUP BY sa.sf_account_id
+                )
+                SELECT 
+                    ad.*,
+                    s.summary as account_summary
+                FROM account_data ad
+                LEFT JOIN summaries s ON (s.source_ids->>'account_id')::text = ad.sf_account_id::text
+                AND s.summary_type = 'salesforce_account'
+                AND s.is_valid = true
+                ORDER BY ad.source_created_at DESC
+            """
+
+            accounts = await db.fetch(query, *query_params)
+
+            # Calculate analytics
+            account_types = {}
+            target_accounts = 0
+            migration_accounts = 0
+            accounts_with_business_case = 0
+            total_accounts = len(accounts)
+            active_accounts = 0
+            high_priority_accounts = 0
+
+            for account in accounts:
+                # Count account types
+                account_type = account.get('type', 'Unknown')
+                account_types[account_type] = account_types.get(
+                    account_type, 0) + 1
+
+                # Count other metrics
+                if account.get('is_target_account', False):
+                    target_accounts += 1
+                if account.get('is_migration_account', False):
+                    migration_accounts += 1
+                if account.get('business_use_case'):
+                    accounts_with_business_case += 1
+                if account.get('ticket_count', 0) > 0 or account.get('issue_count', 0) > 0:
+                    active_accounts += 1
+                if account.get('priority') in ['High', 'Critical']:
+                    high_priority_accounts += 1
+
+            return {
+                "accounts": [dict(account) for account in accounts],
+                "metadata": {
+                    "total_count": total_accounts,
+                    "active_accounts": active_accounts,
+                    "target_accounts": target_accounts,
+                    "migration_accounts": migration_accounts,
+                    "accounts_with_business_case": accounts_with_business_case,
+                    "high_priority_accounts": high_priority_accounts,
+                    "account_type_distribution": account_types,
+                    "date_range": {
+                        "start": start_date,
+                        "end": end_date
+                    },
+                    "client_id": client_id
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting all accounts data: {str(e)}")
+            raise
+
+    async def _get_all_issues_data(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Get data for all Jira issues within date range"""
+        try:
+            start_date = params.get('date_range_start')
+            end_date = params.get('date_range_end')
+            client_id = params.get('client_id')
+
+            # Base query for issues with related data
+            query = """
+                WITH issue_data AS (
+                    SELECT 
+                        j.*,
+                        sa.account_name,
+                        sa.business_use_case,
+                        sa.type as account_type,
+                        COUNT(DISTINCT zt.zd_ticket_id) as ticket_count
+                    FROM jira_issues j
+                    LEFT JOIN salesforce_accounts sa ON j.sf_account_id = sa.sf_account_id
+                    LEFT JOIN zendesk_jira_links zjl ON j.jira_issue_id = zjl.jira_issue_id
+                    LEFT JOIN zendesk_tickets zt ON zjl.zd_ticket_id = zt.zd_ticket_id
+                    WHERE 1=1
+                    AND ($1::timestamp IS NULL OR j.source_created_at >= $1)
+                    AND ($2::timestamp IS NULL OR j.source_created_at <= $2)
+            """
+
+            query_params = [start_date, end_date]
+
+            # Add client_id filter if provided
+            if client_id:
+                query += " AND j.client_id = $3"
+                query_params.append(client_id)
+
+            # Complete the query
+            query += """
+                    GROUP BY j.jira_issue_id, sa.account_name, sa.business_use_case, sa.type
+                )
+                SELECT 
+                    id.*,
+                    s.summary as issue_summary
+                FROM issue_data id
+                LEFT JOIN summaries s ON (s.source_ids->>'issue_id')::text = id.jira_issue_id::text
+                AND s.summary_type = 'jira_issue'
+                AND s.is_valid = true
+                ORDER BY id.source_created_at DESC
+            """
+
+            issues = await db.fetch(query, *query_params)
+
+            # Calculate analytics
+            priority_counts = {}
+            status_counts = {}
+            issue_types = {}
+            total_issues = len(issues)
+            open_issues = 0
+            high_priority_issues = 0
+            issues_with_tickets = 0
+            target_account_issues = 0
+
+            for issue in issues:
+                # Count priorities
+                priority = issue.get('priority', 'Unknown')
+                priority_counts[priority] = priority_counts.get(
+                    priority, 0) + 1
+
+                # Count statuses
+                status = issue.get('issue_status', 'Unknown')
+                status_counts[status] = status_counts.get(status, 0) + 1
+
+                # Count issue types
+                issue_type = issue.get('issue_type', 'Unknown')
+                issue_types[issue_type] = issue_types.get(issue_type, 0) + 1
+
+                # Count other metrics
+                if status not in ['Done', 'Closed', 'Resolved']:
+                    open_issues += 1
+                if priority in ['Urgent', 'High']:
+                    high_priority_issues += 1
+                if issue.get('ticket_count', 0) > 0:
+                    issues_with_tickets += 1
+                if issue.get('is_target_account', False):
+                    target_account_issues += 1
+
+            return {
+                "issues": [dict(issue) for issue in issues],
+                "metadata": {
+                    "total_count": total_issues,
+                    "open_issues": open_issues,
+                    "high_priority_issues": high_priority_issues,
+                    "issues_with_tickets": issues_with_tickets,
+                    "target_account_issues": target_account_issues,
+                    "priority_distribution": priority_counts,
+                    "status_distribution": status_counts,
+                    "issue_type_distribution": issue_types,
+                    "date_range": {
+                        "start": start_date,
+                        "end": end_date
+                    },
+                    "client_id": client_id
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting all issues data: {str(e)}")
             raise
 
     async def _store_summary(

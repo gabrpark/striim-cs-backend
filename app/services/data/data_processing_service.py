@@ -229,7 +229,7 @@ class DataProcessingService:
             {active_issues_text}
             """
 
-            # Generate summary using LLM
+            # Generate summary using LLM with the account_health prompt
             return await llm_service.generate_summary(
                 text=full_context,
                 summary_type="account_health"

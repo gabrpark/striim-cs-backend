@@ -57,15 +57,19 @@ async def get_group_summary(
         }
 
         if customer_id:
-            # Get ticket IDs for this customer
-            query = """
-                SELECT zd_ticket_id::text
-                FROM zendesk_tickets
-                WHERE client_id = $1::text
-            """
-            ticket_ids = await db.fetch(query, customer_id)
-            params['include_ticket_ids'] = [t['zd_ticket_id']
-                                            for t in ticket_ids]
+            # Add client_id to params for all summary types
+            params['client_id'] = customer_id
+
+            # For ticket summaries, get ticket IDs for this customer
+            if group_type == 'all_tickets':
+                query = """
+                    SELECT zd_ticket_id::text
+                    FROM zendesk_tickets
+                    WHERE client_id = $1::text
+                """
+                ticket_ids = await db.fetch(query, customer_id)
+                params['include_ticket_ids'] = [t['zd_ticket_id']
+                                                for t in ticket_ids]
 
         return await hierarchical_summary_service.get_or_generate_summary(
             summary_type=group_type,

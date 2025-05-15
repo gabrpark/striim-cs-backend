@@ -15,68 +15,49 @@ class LLMService:
         try:
             prompts = {
                 "zendesk_ticket": (
-                    "As a senior support analyst, provide a clear and concise summary of this ticket. "
-                    "Focus on:\n"
-                    "- What's the core issue and its severity?\n"
-                    "- What's being done to resolve it?\n"
-                    "- How does this impact the customer?\n"
-                    "- What are the immediate next steps?\n\n"
-                    "Keep it brief and actionable. No markdown formatting."
+                    "Provide an extremely concise summary of this support ticket in 2-3 sentences. "
+                    "Then add 1-2 sentences with the most critical action or recommendation. "
+                    "No headers, sections, or formatting. Just plain text."
                 ),
                 "jira_issue": (
-                    "As a technical analyst, provide a clear summary of this Jira issue. "
-                    "Focus on:\n"
-                    "- Technical problem and its impact\n"
-                    "- Current status and progress\n"
-                    "- Related dependencies\n"
-                    "- Next technical steps\n\n"
-                    "Keep it technical but clear. No markdown formatting."
+                    "Provide an extremely concise summary of this Jira issue in 2-3 sentences. "
+                    "Then add 1-2 sentences with the most critical action or recommendation. "
+                    "No headers, sections, or formatting. Just plain text."
                 ),
                 "salesforce_account": (
-                    "As a customer success analyst, provide a summary of this account. "
-                    "Focus on:\n"
-                    "- Account health and status\n"
-                    "- Key business metrics\n"
-                    "- Support history and patterns\n"
-                    "- Strategic recommendations\n\n"
-                    "Keep it business-focused and actionable. No markdown formatting."
+                    "Provide an extremely concise summary of this account in 2-3 sentences. "
+                    "Then add 1-2 sentences with the most critical action or recommendation. "
+                    "No headers, sections, or formatting. Just plain text."
+                ),
+                "account_health": (
+                    "Provide an extremely concise summary of this account's health in 2-3 sentences. "
+                    "Then add 1-2 sentences with the most critical action or recommendation. "
+                    "No headers, sections, or formatting. Just plain text."
                 ),
                 "all_tickets": (
-                    "Analyze all support tickets for this period and provide:\n"
-                    "1. Key trends and patterns\n"
-                    "2. Common issues and their frequency\n"
-                    "3. Overall support health indicators\n"
-                    "4. Areas needing attention\n\n"
-                    "Focus on actionable insights and patterns."
+                    "Provide an extremely concise summary of these support tickets in 2-3 sentences. "
+                    "Then add 1-2 sentences with the most critical action or recommendation. "
+                    "No headers, sections, or formatting. Just plain text."
                 ),
                 "all_issues": (
-                    "Analyze all technical issues and provide:\n"
-                    "1. Technical trends and patterns\n"
-                    "2. Common technical problems\n"
-                    "3. System health indicators\n"
-                    "4. Areas needing technical attention\n\n"
-                    "Focus on technical insights and patterns."
+                    "Provide an extremely concise summary of these technical issues in 2-3 sentences. "
+                    "Then add 1-2 sentences with the most critical action or recommendation. "
+                    "No headers, sections, or formatting. Just plain text."
                 ),
                 "all_accounts": (
-                    "Analyze all accounts and provide:\n"
-                    "1. Account health trends\n"
-                    "2. Common business patterns\n"
-                    "3. Overall customer success metrics\n"
-                    "4. Strategic recommendations\n\n"
-                    "Focus on business insights and patterns."
+                    "Provide an extremely concise summary of these accounts in 2-3 sentences. "
+                    "Then add 1-2 sentences with the most critical action or recommendation. "
+                    "No headers, sections, or formatting. Just plain text."
                 ),
                 "system_wide": (
-                    "Provide a comprehensive system-wide analysis covering:\n"
-                    "1. Overall system health and performance\n"
-                    "2. Key metrics across all dimensions\n"
-                    "3. Major trends and patterns\n"
-                    "4. Strategic recommendations\n\n"
-                    "Focus on high-level insights and actionable recommendations."
+                    "Provide an extremely concise summary of the system-wide status in 2-3 sentences. "
+                    "Then add 1-2 sentences with the most critical action or recommendation. "
+                    "No headers, sections, or formatting. Just plain text."
                 ),
                 "general": (
-                    "Provide a clear and concise summary of the following data:\n"
-                    "{text}\n\n"
-                    "Focus on key points and actionable insights."
+                    "Provide an extremely concise summary in 2-3 sentences. "
+                    "Then add 1-2 sentences with the most critical action or recommendation. "
+                    "No headers, sections, or formatting. Just plain text."
                 )
             }
 
